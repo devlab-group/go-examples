@@ -10,9 +10,13 @@ Before use install `golang.org/x/crypto/ed25519` library:
 ```shell
 go get golang.org/x/crypto/ed25519
 # Or
-bake go get golang.org/x/crypto/ed25519
-# Or
 dep ensure
+```
+
+Or with bake
+
+```shell
+bake go get golang.org/x/crypto/ed25519
 # Or
 bake dep ensure
 ```
