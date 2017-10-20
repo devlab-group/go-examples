@@ -15,6 +15,10 @@ task:go() {
   task:wrap go $@
 }
 
+task:run() {
+  task:go run $@
+}
+
 task:dep() {
   task:wrap dep $@
 }
