@@ -8,16 +8,19 @@ import (
   "golang.org/x/crypto/ed25519"
 )
 
+// Hash bytes with sha256
 func Hash(bytes []byte) ([]byte) {
   hasher := sha256.New()
   hasher.Write(bytes)
   return hasher.Sum(nil)
 }
 
-func HashString(str string) ([]byte)  {
+// Hash string with sha256
+func HashFromString(str string) ([]byte)  {
   return Hash([]byte(str))
 }
 
+// Convert bytes to hex encoded string
 func Hex(bytes []byte) (string) {
   return hex.EncodeToString(bytes)
 }
@@ -27,7 +30,7 @@ func main()  {
     log.Fatal("Argument #1 is empty")
   }
 
-  public, private, _ := ed25519.GenerateKey(bytes.NewReader(HashString(os.Args[1])))
+  public, private, _ := ed25519.GenerateKey(bytes.NewReader(HashFromString(os.Args[1])))
 
   message := []byte("Hello World")
 
