@@ -1,3 +1,4 @@
+# Run golang container
 task:wrap() {
   cd $CWD
   local PORT=${PORT:-4000}
@@ -11,18 +12,17 @@ task:wrap() {
     -ti golang $@
 }
 
+# Run go in workspace
 task:go() {
   task:wrap go $@
 }
 
+# Execute go run ... in workspace
 task:run() {
   task:go run $@
 }
 
-task:dep() {
-  task:wrap dep $@
-}
-
+# Build current subproject
 task:build() {
   local FILE=$1
   shift 1
@@ -30,6 +30,7 @@ task:build() {
   task:go build -o build/$FILE $@
 }
 
+# Create new sub-project in project's root
 task:new() {
   local NAME=$1
 
@@ -43,7 +44,14 @@ task:new() {
   echo "# $NAME" > $NAME/readme.md
 }
 
+# Initialize subproject
 task:init() {
+  cd $CWD
   # Install dependency management tool
   task:go get -u github.com/golang/dep/cmd/dep
+}
+
+# Run go's dep utility
+task:dep() {
+  task:wrap dep $@
 }
