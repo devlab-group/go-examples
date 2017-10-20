@@ -26,6 +26,19 @@ task:build() {
   task:go build -o build/$FILE $@
 }
 
+task:new() {
+  local NAME=$1
+
+  if [ -d "$NAME" ]
+  then
+    echo "Project '$NAME' already exists"
+    exit 1
+  fi
+
+  mkdir $NAME
+  echo "# $NAME" > $NAME/readme.md
+}
+
 task:init() {
   # Install dependency management tool
   task:go get -u github.com/golang/dep/cmd/dep
