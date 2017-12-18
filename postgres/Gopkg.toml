@@ -26,3 +26,7 @@
 [[constraint]]
   name = "github.com/go-pg/pg"
   version = "6.6.18"
+
+[[constraint]]
+  name = "github.com/go-pg/migrations"
+  version = "6.1.0"

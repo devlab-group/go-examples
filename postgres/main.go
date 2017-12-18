@@ -5,54 +5,55 @@ import (
 	"github.com/go-ini/ini"
 	"github.com/go-pg/pg"
 	"os"
+	"project/migrations"
+	"project/models"
 	"time"
 )
 
-type User struct {
-	Id        int64
-	Username  string    `sql:",notnull,unique"`
-	Email     string    `sql:",notnull,unique"`
-	CreatedAt time.Time `sql:",notnull"`
-}
-
-func (u User) String() string {
-	return fmt.Sprintf("User<%d %s %s %s>", u.Id, u.Username, u.Email, u.CreatedAt)
-}
+var db *pg.DB
 
 func main() {
-	db := pg.Connect(dbConnectOptions())
+	db = pg.Connect(dbConnectOptions())
 	defer db.Close()
 
-	// Ignore errors from this call. (It's duplicate table error)
-	_ = createSchema(db)
+	switch os.Args[1] {
+	case "users":
+		resolveUserCommands()
+	case "migrations":
+		migrations.Run(db)
+	default:
+		fatal("Unknown command")
+	}
+}
 
+func resolveUserCommands() {
 	switch os.Args[2] {
 	case "add":
 		if len(os.Args) != 5 {
 			fatal("Usage: users add USERNAME EMAIL")
 		}
-		user, err := insert(db, os.Args[3], os.Args[4])
+		user, err := createUser(db, os.Args[3], os.Args[4])
 		checkErr(err)
 		fmt.Printf("New user with id %d was created successfully\n", user.Id)
 	case "del":
 		if len(os.Args) < 4 {
 			fatal("Usage: users del ID...")
 		}
-		deletedUsers, err := remove(db, os.Args[3:])
+		deletedUsers, err := removeUser(db, os.Args[3:])
 		checkErr(err)
 		fmt.Printf("%d users were deleted successfully\n", deletedUsers)
 	case "update":
 		if len(os.Args) > 5 {
 			fatal("Usage: users update ID EMAIL USERNAME")
 		}
-		user, err := update(db, os.Args[3], os.Args[4:])
+		user, err := updateUser(db, os.Args[3], os.Args[4:])
 		checkErr(err)
 		fmt.Println(user)
 	case "all":
 		if len(os.Args) > 3 {
 			fatal("Usage: users all")
 		}
-		users, err := all(db)
+		users, err := allUsers(db)
 		checkErr(err)
 
 		fmt.Println("id | username | email | created_at")
@@ -66,8 +67,8 @@ func main() {
 /**
  * Creates new user with passed username and email
  */
-func insert(db *pg.DB, username, email string) (user User, err error) {
-	user = User{
+func createUser(db *pg.DB, username, email string) (user models.User, err error) {
+	user = models.User{
 		Username:  username,
 		Email:     email,
 		CreatedAt: time.Now(),
@@ -79,9 +80,9 @@ func insert(db *pg.DB, username, email string) (user User, err error) {
 /**
  * Removes users with by ids
  */
-func remove(db *pg.DB, ids []string) (int, error) {
+func removeUser(db *pg.DB, ids []string) (int, error) {
 	inIds := pg.In(ids)
-	res, err := db.Model(&User{}).Where("id IN (?)", inIds).Delete()
+	res, err := db.Model(&models.User{}).Where("id IN (?)", inIds).Delete()
 	if err != nil {
 		return 0, err
 	}
@@ -91,8 +92,8 @@ func remove(db *pg.DB, ids []string) (int, error) {
 /**
  * Updates user by id
  */
-func update(db *pg.DB, id string, fields []string) (User, error) {
-	var user User
+func updateUser(db *pg.DB, id string, fields []string) (models.User, error) {
+	var user models.User
 	model := db.Model(&user)
 
 	if len(fields) > 0 {
@@ -108,7 +109,7 @@ func update(db *pg.DB, id string, fields []string) (User, error) {
 		Update()
 
 	if err != nil {
-		return User{}, err
+		return models.User{}, err
 	}
 	return user, nil
 }
@@ -116,21 +117,13 @@ func update(db *pg.DB, id string, fields []string) (User, error) {
 /**
  * Returns all users
  */
-func all(db *pg.DB) ([]User, error) {
-	var users []User
+func allUsers(db *pg.DB) ([]models.User, error) {
+	var users []models.User
 	err := db.Model(&users).Select()
 	if err != nil {
-		return []User{}, err
+		return []models.User{}, err
 	}
 	return users, nil
-}
-
-func createSchema(db *pg.DB) error {
-	err := db.CreateTable(&User{}, nil)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 /**
