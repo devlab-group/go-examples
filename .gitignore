@@ -1,3 +1,5 @@
 **/.go/
 **/vendor/
 **/build/
+
+postgres/db.ini
