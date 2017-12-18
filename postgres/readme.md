@@ -5,7 +5,7 @@ Basic PostgreSQL operations
 Before use install necessary libraries:
 
 ```shell
-go get github.com/lib/pq
+go get github.com/go-pg/pg
 go get gopkg.in/ini.v1
 # Or
 dep ensure
@@ -14,7 +14,7 @@ dep ensure
 Or with bake
 
 ```shell
-bake go get github.com/lib/pq
+bake go get github.com/go-pg/pg
 bake go get gopkg.in/ini.v1
 # Or
 bake dep ensure

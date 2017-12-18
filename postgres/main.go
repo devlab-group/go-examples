@@ -1,162 +1,142 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
 	"github.com/go-ini/ini"
-	_ "github.com/lib/pq"
+	"github.com/go-pg/pg"
 	"os"
 	"time"
 )
 
 type User struct {
-	id                          int
-	username, phone, created_at string
+	Id        int64
+	Username  string    `sql:",notnull,unique"`
+	Email     string    `sql:",notnull,unique"`
+	CreatedAt time.Time `sql:",notnull"`
 }
 
-func init() {
-	db, err := sql.Open("postgres", dbConnectParams())
-	checkErr(err)
-	defer db.Close()
-
-	/**
-	 * Create `users` table on init
-	 */
-	_, err = db.Exec(
-		`CREATE TABLE IF NOT EXISTS users (
-	     id serial NOT NULL,
-	     username character varying(100) NOT NULL,
-       phone character varying(100),
-	     created_at date,
-	     CONSTRAINT user_pkey PRIMARY KEY (id)
-	   )
-	   WITH (OIDS=FALSE)`)
-	checkErr(err)
+func (u User) String() string {
+	return fmt.Sprintf("User<%d %s %s %s>", u.Id, u.Username, u.Email, u.CreatedAt)
 }
 
 func main() {
-	db, err := sql.Open("postgres", dbConnectParams())
-	checkErr(err)
+	db := pg.Connect(dbConnectOptions())
 	defer db.Close()
+
+	// Ignore errors from this call. (It's duplicate table error)
+	_ = createSchema(db)
 
 	switch os.Args[2] {
 	case "add":
 		if len(os.Args) != 5 {
-			fatal("Usage: users add USERNAME PHONE")
+			fatal("Usage: users add USERNAME EMAIL")
 		}
-		id, err := insert(db, os.Args[3], os.Args[4])
+		user, err := insert(db, os.Args[3], os.Args[4])
 		checkErr(err)
-		fmt.Printf("New user with id %d was created successfully\n", id)
+		fmt.Printf("New user with id %d was created successfully\n", user.Id)
 	case "del":
 		if len(os.Args) < 4 {
 			fatal("Usage: users del ID...")
 		}
-		err := remove(db, os.Args[3:])
+		deletedUsers, err := remove(db, os.Args[3:])
 		checkErr(err)
-		fmt.Println("Users were deleted successfully\n")
-	case "update-phone":
-		if len(os.Args) != 5 {
-			fatal("Usage: users update-phone ID PHONE")
+		fmt.Printf("%d users were deleted successfully\n", deletedUsers)
+	case "update":
+		if len(os.Args) > 5 {
+			fatal("Usage: users update ID EMAIL USERNAME")
 		}
-		err := updatePhone(db, os.Args[3], os.Args[4])
+		user, err := update(db, os.Args[3], os.Args[4:])
 		checkErr(err)
-		fmt.Println("Phone was updated successfully")
-	case "show":
-		if len(os.Args) > 4 {
-			fatal("Usage: users show [SUBSTRING]")
+		fmt.Println(user)
+	case "all":
+		if len(os.Args) > 3 {
+			fatal("Usage: users all")
 		}
-		var s string
-		if len(os.Args) == 4 {
-			s = os.Args[3]
-		}
-		res, err := show(db, s)
+		users, err := all(db)
 		checkErr(err)
 
-		fmt.Println("id | username | phone | created_at")
+		fmt.Println("id | username | email | created_at")
 
-		for _, user := range res {
-			fmt.Printf("%3v | %8v | %15v | %20v\n", user.id, user.username, user.phone, user.created_at)
+		for _, user := range users {
+			fmt.Printf("%3v | %8v | %15v | %20v\n", user.Id, user.Username, user.Email, user.CreatedAt)
 		}
 	}
 }
 
 /**
- * Creates new user with passed username and phone
- * Raw Query
+ * Creates new user with passed username and email
  */
-func insert(db *sql.DB, username, phone string) (insertedId int, err error) {
-	err = db.QueryRow("INSERT INTO users(username,phone,created_at) VALUES ($1,$2,$3) returning id;", "Molly", "+444567564543", time.Now()).Scan(&insertedId)
+func insert(db *pg.DB, username, email string) (user User, err error) {
+	user = User{
+		Username:  username,
+		Email:     email,
+		CreatedAt: time.Now(),
+	}
+	err = db.Insert(&user)
 	return
 }
 
 /**
- * Removes user with passed ids
- * Statement
+ * Removes users with by ids
  */
-func remove(db *sql.DB, ids []string) error {
-	stmt, err := db.Prepare("DELETE FROM users WHERE id = $1")
+func remove(db *pg.DB, ids []string) (int, error) {
+	inIds := pg.In(ids)
+	res, err := db.Model(&User{}).Where("id IN (?)", inIds).Delete()
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected(), nil
+}
+
+/**
+ * Updates user by id
+ */
+func update(db *pg.DB, id string, fields []string) (User, error) {
+	var user User
+	model := db.Model(&user)
+
+	if len(fields) > 0 {
+		model.Set("email = ?", fields[0])
+	}
+
+	if len(fields) > 1 {
+		model.Set("username = ?", fields[1])
+	}
+	_, err := model.
+		Where("id = ?", id).
+		Returning("*").
+		Update()
+
+	if err != nil {
+		return User{}, err
+	}
+	return user, nil
+}
+
+/**
+ * Returns all users
+ */
+func all(db *pg.DB) ([]User, error) {
+	var users []User
+	err := db.Model(&users).Select()
+	if err != nil {
+		return []User{}, err
+	}
+	return users, nil
+}
+
+func createSchema(db *pg.DB) error {
+	err := db.CreateTable(&User{}, nil)
 	if err != nil {
 		return err
-	}
-	defer stmt.Close()
-	for _, v := range ids {
-		_, err = stmt.Exec(v)
-		if err != nil {
-			return err
-		}
 	}
 	return nil
 }
 
 /**
- * Updates phone number of user with passed id
- * Transaction
+ * Parse database config .ini file and return connect options
  */
-func updatePhone(db *sql.DB, id, phone string) error {
-	tx, err := db.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	_, err = tx.Exec("UPDATE users SET phone = $1 WHERE id = $2;", phone, id)
-
-	if err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
-func show(db *sql.DB, arg string) ([]User, error) {
-	var s string
-	if len(arg) != 0 {
-		s = "WHERE username LIKE '%" + arg + "%'"
-	}
-	rows, err := db.Query("SELECT * FROM users " + s + " ORDER BY created_at")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var users = make([]User, 0)
-	var user User
-	for rows.Next() {
-		err = rows.Scan(&user.id, &user.username, &user.phone, &user.created_at)
-		if err != nil {
-			return nil, err
-		}
-		users = append(users, user)
-	}
-	err = rows.Err()
-	if err != nil {
-		return nil, err
-	}
-	return users, nil
-}
-
-/**
- * Parse database config .ini file and return formatted connection string
- */
-func dbConnectParams() string {
+func dbConnectOptions() *pg.Options {
 	cfg, err := ini.Load("db.ini")
 	checkErr(err)
 
@@ -172,21 +152,19 @@ func dbConnectParams() string {
 	password, err := section.GetKey("password")
 	checkErr(err)
 
-	host := section.Key("host").Validate(func(in string) string {
+	addr := section.Key("addr").Validate(func(in string) string {
 		if len(in) == 0 {
-			return "localhost"
-		}
-		return in
-	})
-	port := section.Key("port").Validate(func(in string) string {
-		if len(in) == 0 {
-			return "5432"
+			return "localhost:5432"
 		}
 		return in
 	})
 
-	return fmt.Sprintf("user=%s password=%s dbname=%s host=%s port=%s sslmode=disable",
-		user, password, dbname, host, port)
+	return &pg.Options{
+		User:     user.String(),
+		Password: password.String(),
+		Database: dbname.String(),
+		Addr:     addr,
+	}
 }
 
 func checkErr(err error) {

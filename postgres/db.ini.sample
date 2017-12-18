@@ -2,5 +2,4 @@
 dbname=golang_test
 user=postgres
 password=
-host=127.0.0.1
-port=5432
+addr=127.0.0.1:5432
