@@ -4,12 +4,16 @@
 [[projects]]
   branch = "master"
   name = "golang.org/x/crypto"
-  packages = ["ed25519","ed25519/internal/edwards25519"]
+  packages = [
+    "ed25519",
+    "ed25519/internal/edwards25519",
+    "sha3"
+  ]
   revision = "541b9d50ad47e36efd8fb423e938e59ff1691f68"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "5046e265393bd5e54f570ce29ae8bc6fa3f30ef5110e922996540400f287c64a"
+  inputs-digest = "11adfdbb925eb13a1862bc5147f8b4f9d7b870c0cb28301b1a3074f094973c97"
   solver-name = "gps-cdcl"
   solver-version = 1
