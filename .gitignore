@@ -3,3 +3,4 @@
 **/build/
 
 postgres/db.ini
+keystore/keys
